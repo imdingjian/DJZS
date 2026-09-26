@@ -233,8 +233,12 @@
                 restDayRate2: 1.67,
                 onboardingDate: `${new Date().getFullYear() - 1}-03-15`,
                 laborInsuranceDeduction: 1050,
-                healthInsuranceDeduction: 580
+                healthInsuranceDeduction: 580,
+                courtDeduction: 0,
+                autoResetCourtDeduction: true
             },
+            monthlyDeductions: {}, // 獨立紀錄每個月的扣款: { 'YYYY-MM': { labor: 1050, health: 580, court: 0 } }
+            monthlyActualIncomes: {}, // 獨立紀錄每個月工作分頁的當月總實際收入: { 'YYYY-MM': 42000 }
             workRecords: {
                 [`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-02`]: {
                     type: 'work', checkIn: '09:00', checkOut: '19:30', overtimeHours: 2.5, memo: '處理季報資料'
@@ -285,6 +289,11 @@
                         if (this.data.selectedWeekOffset === undefined) this.data.selectedWeekOffset = 0;
                         if (!this.data.workSettings.laborInsuranceDeduction) this.data.workSettings.laborInsuranceDeduction = 1050;
                         if (!this.data.workSettings.healthInsuranceDeduction) this.data.workSettings.healthInsuranceDeduction = 580;
+                        if (this.data.workSettings.courtDeduction === undefined) this.data.workSettings.courtDeduction = 0;
+                        if (this.data.workSettings.autoResetCourtDeduction === undefined) this.data.workSettings.autoResetCourtDeduction = true;
+                        
+                        if (!this.data.monthlyDeductions) this.data.monthlyDeductions = {};
+                        if (!this.data.monthlyActualIncomes) this.data.monthlyActualIncomes = {};
                     } catch (e) {
                         console.error('Failed to parse state, resetting...', e);
                         this.data = JSON.parse(JSON.stringify(INITIAL_STATE));
@@ -361,8 +370,10 @@
                 let y = this.data.currentYear;
                 if (m < 0) { m = 11; y--; }
                 if (m > 11) { m = 0; y++; }
+                
                 this.data.currentMonth = m;
                 this.data.currentYear = y;
+
                 this.saveState();
             }
 
@@ -384,39 +395,53 @@
                 this.saveState();
             }
 
+            // 取得指定月份的勞保、健保、法院扣款資料
+            getDeductionsForMonth(year, month) {
+                const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+                const mData = this.data.monthlyDeductions[monthKey];
+                
+                if (mData) {
+                    return {
+                        laborDeduction: parseFloat(mData.labor) || 0,
+                        healthDeduction: parseFloat(mData.health) || 0,
+                        courtDeduction: parseFloat(mData.court) || 0
+                    };
+                }
+
+                return {
+                    laborDeduction: parseFloat(this.data.workSettings.laborInsuranceDeduction) || 0,
+                    healthDeduction: parseFloat(this.data.workSettings.healthInsuranceDeduction) || 0,
+                    courtDeduction: parseFloat(this.data.workSettings.courtDeduction) || 0
+                };
+            }
+
+            // 取得指定月份工作分頁的「當月總實際收入」
+            getWorkActualIncomeForMonth(year, month) {
+                const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+                if (this.data.monthlyActualIncomes[monthKey] !== undefined) {
+                    return parseFloat(this.data.monthlyActualIncomes[monthKey]) || 0;
+                }
+                return parseFloat(this.data.workSettings.monthlySalary) || 0;
+            }
+
             getMonthlyCalculations(year = this.data.currentYear, month = this.data.currentMonth) {
                 const prefix = `${year}-${String(month + 1).padStart(2, '0')}`;
                 
-                // 1. Work Income
-                const hourlyWorkRate = (this.data.workSettings.monthlySalary / 30 / this.data.workSettings.dailyHours);
-                let overtimeIncome = 0;
+                // 1. 工作正職淨薪統計為工作分頁加入的當月總實際收入
+                const netWorkIncome = this.getWorkActualIncomeForMonth(year, month);
+                
                 let leaveDays = 0;
-
                 Object.entries(this.data.workRecords).forEach(([dateStr, record]) => {
-                    if (dateStr.startsWith(prefix)) {
-                        if (record.type === 'work' && record.overtimeHours) {
-                            overtimeIncome += parseFloat(record.overtimeHours) * hourlyWorkRate * (this.data.workSettings.overtimeRate1 || 1.34);
-                        } else if (record.type === 'rest_overtime' && record.restDayHours) {
-                            const hrs = parseFloat(record.restDayHours);
-                            const r1 = this.data.workSettings.restDayRate1 || 1.34;
-                            const r2 = this.data.workSettings.restDayRate2 || 1.67;
-                            if (hrs <= 2) {
-                                overtimeIncome += hrs * hourlyWorkRate * r1;
-                            } else {
-                                overtimeIncome += (2 * hourlyWorkRate * r1) + ((hrs - 2) * hourlyWorkRate * r2);
-                            }
-                        } else if (record.type === 'leave') {
-                            leaveDays += 1;
-                        }
+                    if (dateStr.startsWith(prefix) && record.type === 'leave') {
+                        leaveDays += 1;
                     }
                 });
 
-                const laborDeduction = parseFloat(this.data.workSettings.laborInsuranceDeduction) || 0;
-                const healthDeduction = parseFloat(this.data.workSettings.healthInsuranceDeduction) || 0;
-                const totalMonthlyDeduction = laborDeduction + healthDeduction;
-
-                const grossWorkIncome = Math.round(this.data.workSettings.monthlySalary + overtimeIncome);
-                const netWorkIncome = grossWorkIncome - totalMonthlyDeduction;
+                const d = this.getDeductionsForMonth(year, month);
+                const laborDeduction = d.laborDeduction;
+                const healthDeduction = d.healthDeduction;
+                const courtDeduction = d.courtDeduction;
+                const totalMonthlyDeduction = laborDeduction + healthDeduction + courtDeduction;
 
                 // 2. Part-Time Income
                 let totalPtIncome = 0;
@@ -430,7 +455,7 @@
                 });
                 totalPtIncome = Math.round(totalPtIncome);
 
-                // 3. Extra Income
+                // 3. Extra Income (當日收入)
                 let totalExtraIncome = 0;
                 this.data.extraIncomes.forEach(rec => {
                     if (rec.date.startsWith(prefix)) {
@@ -438,7 +463,10 @@
                     }
                 });
 
-                // 4. Community Service
+                // 4. 當月總淨收入 = 工作正職淨薪 + 兼職收入 + 當日收入
+                const totalIncome = netWorkIncome + totalPtIncome + totalExtraIncome;
+
+                // 5. Community Service
                 let monthlyCompletedCsHours = 0;
                 let monthlyPendingCsHours = 0;
 
@@ -461,15 +489,14 @@
                 });
 
                 return {
-                    grossWorkIncome,
                     netWorkIncome,
                     monthlyDeduction: totalMonthlyDeduction,
                     laborDeduction,
                     healthDeduction,
+                    courtDeduction,
                     partTimeIncome: totalPtIncome,
                     extraIncome: totalExtraIncome,
-                    totalIncome: netWorkIncome + totalPtIncome + totalExtraIncome,
-                    grossTotalIncome: grossWorkIncome + totalPtIncome + totalExtraIncome,
+                    totalIncome: totalIncome,
                     leaveDays,
                     monthlyCsHours: monthlyCompletedCsHours,
                     monthlyPendingCsHours: monthlyPendingCsHours,
@@ -482,15 +509,40 @@
                 let annualTotalIncome = 0;
                 let annualTotalDeductions = 0;
 
-                for (let m = 0; m < 12; m++) {
+                // 依據指示：總表的年度執行扣款從2027年1月開始計算
+                const startYear = 2027;
+                
+                if (year < startYear) {
+                    return {
+                        annualTotalIncome: 0,
+                        annualTotalDeductions: 0,
+                        processedMonths: 0,
+                        isCalculated: false
+                    };
+                }
+
+                const today = new Date();
+                const actualCurrentYear = today.getFullYear();
+                const actualCurrentMonth = today.getMonth(); // 0-based
+
+                let maxMonthCount = 12;
+                if (year > actualCurrentYear) {
+                    maxMonthCount = 0;
+                } else if (year === actualCurrentYear) {
+                    maxMonthCount = actualCurrentMonth + 1;
+                }
+
+                for (let m = 0; m < maxMonthCount; m++) {
                     const mCalc = this.getMonthlyCalculations(year, m);
-                    annualTotalIncome += mCalc.grossTotalIncome;
+                    annualTotalIncome += mCalc.totalIncome;
                     annualTotalDeductions += mCalc.monthlyDeduction;
                 }
 
                 return {
                     annualTotalIncome,
-                    annualTotalDeductions
+                    annualTotalDeductions,
+                    processedMonths: maxMonthCount,
+                    isCalculated: true
                 };
             }
 
@@ -511,24 +563,24 @@
                         <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
                            
                             <div class="bg-gradient-to-br from-brand-500 to-sky-600 p-3.5 rounded-2xl shadow-md text-white flex flex-col">
-                                <span class="text-[11px] text-sky-100 font-medium">年度總收入</span>
-                                <span class="text-lg font-bold mt-1">$${annualStats.annualTotalIncome.toLocaleString()}</span>
-                                <span class="text-[10px] text-sky-200 mt-0.5">${this.data.currentYear} 全年預估</span>
+                                <span class="text-[11px] text-sky-100 font-medium">年度累計總收入</span>
+                                <span class="text-lg font-bold mt-1">$${annualStats.isCalculated ? annualStats.annualTotalIncome.toLocaleString() : '0'}</span>
+                                <span class="text-[10px] text-sky-200 mt-0.5">${annualStats.isCalculated ? `${this.data.currentYear}年(截至${annualStats.processedMonths}月)` : '2027年起開始計入'}</span>
                             </div>
                             <div class="bg-gradient-to-br from-rose-500 to-pink-600 p-3.5 rounded-2xl shadow-md text-white flex flex-col">
                                 <span class="text-[11px] text-rose-100 font-medium">年度執行扣款</span>
-                                <span class="text-lg font-bold mt-1">$${annualStats.annualTotalDeductions.toLocaleString()}</span>
-                                <span class="text-[10px] text-rose-200 mt-0.5">全年度勞健保扣款</span>
+                                <span class="text-lg font-bold mt-1">$${annualStats.isCalculated ? annualStats.annualTotalDeductions.toLocaleString() : '0'}</span>
+                                <span class="text-[10px] text-rose-200 mt-0.5">${annualStats.isCalculated ? `截至${annualStats.processedMonths}月累計扣款` : '自2027年1月起計算'}</span>
                             </div>
                             <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
                                 <span class="text-[11px] text-slate-500 font-medium">當月總淨收入</span>
                                 <span class="text-lg font-bold text-slate-900 mt-1">$${stats.totalIncome.toLocaleString()}</span>
-                                <span class="text-[10px] text-emerald-600 mt-0.5 flex items-center gap-0.5"><i data-lucide="trending-up" class="w-3 h-3"></i>已扣除勞健保</span>
+                                <span class="text-[10px] text-emerald-600 mt-0.5 flex items-center gap-0.5"><i data-lucide="trending-up" class="w-3 h-3"></i>正職淨薪+兼職+當日</span>
                             </div>
                             <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
                                 <span class="text-[11px] text-slate-500 font-medium">工作正職淨薪</span>
                                 <span class="text-lg font-bold text-brand-600 mt-1">$${stats.netWorkIncome.toLocaleString()}</span>
-                                <span class="text-[10px] text-slate-400 mt-0.5">扣保費-$${stats.monthlyDeduction}</span>
+                                <span class="text-[10px] text-slate-400 mt-0.5">當月總實際收入</span>
                             </div>
                             <div class="bg-white p-3.5 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
                                 <span class="text-[11px] text-slate-500 font-medium">兼職打工收入</span>
@@ -749,6 +801,9 @@
                 const hourly = settings.monthlySalary / 30 / settings.dailyHours;
                 const seniority = DateUtils.calculateSeniority(settings.onboardingDate);
 
+                const currentDeductions = this.getDeductionsForMonth(this.data.currentYear, this.data.currentMonth);
+                const currentActualIncome = this.getWorkActualIncomeForMonth(this.data.currentYear, this.data.currentMonth);
+
                 return `
                     <div class="space-y-6">
                         <!-- Top Section: Seniority Badge Card -->
@@ -826,31 +881,45 @@
                             </div>
                         </div>
 
-                        <!-- Section 2: Work & Salary Settings (Moved Below Attendance Records) -->
+                        <!-- Section 2: Work & Salary Settings -->
                         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                            <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                                <i data-lucide="settings" class="w-5 h-5 text-brand-500"></i> 正職薪資、入職日期與勞健保費率設定
-                            </h3>
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                    <i data-lucide="settings" class="w-5 h-5 text-brand-500"></i> 
+                                    正職薪資與【${this.data.currentYear}年${this.data.currentMonth+1}月】當月總實際收入及扣款設定
+                                </h3>
+                                <span class="text-xs bg-amber-50 text-amber-700 font-medium px-2.5 py-1 rounded-lg border border-amber-200">
+                                    扣款與實際收入僅套用於當前月份，不影響其他月份
+                                </span>
+                            </div>
                             <form onsubmit="app.saveWorkSettings(event)" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 <div>
                                     <label class="block text-xs font-semibold text-slate-600 mb-1">入職時間 (用於計算年資)</label>
                                     <input type="date" id="ws-onboarding" value="${settings.onboardingDate || ''}" required class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none">
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1">月薪 (NTD)</label>
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1">約定月薪 (NTD)</label>
                                     <input type="number" id="ws-salary" value="${settings.monthlySalary}" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-emerald-700 mb-1">【${this.data.currentMonth+1}月】當月總實際收入 (自行輸入 NTD)</label>
+                                    <input type="number" id="ws-actual-income" value="${currentActualIncome}" font-bold class="w-full px-3 py-2 border border-emerald-300 bg-emerald-50/30 font-bold text-emerald-800 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none">
                                 </div>
                                 <div>
                                     <label class="block text-xs font-semibold text-slate-600 mb-1">每日標準工時 (小時)</label>
                                     <input type="number" step="0.5" id="ws-hours" value="${settings.dailyHours}" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none">
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1">勞保扣款 (每月 NTD)</label>
-                                    <input type="number" id="ws-labor" value="${settings.laborInsuranceDeduction || 0}" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none">
+                                    <label class="block text-xs font-semibold text-brand-600 mb-1">【${this.data.currentMonth+1}月】勞保扣款 (NTD)</label>
+                                    <input type="number" id="ws-labor" value="${currentDeductions.laborDeduction}" class="w-full px-3 py-2 border border-brand-200 bg-brand-50/20 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none">
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1">健保扣款 (每月 NTD)</label>
-                                    <input type="number" id="ws-health" value="${settings.healthInsuranceDeduction || 0}" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none">
+                                    <label class="block text-xs font-semibold text-brand-600 mb-1">【${this.data.currentMonth+1}月】健保扣款 (NTD)</label>
+                                    <input type="number" id="ws-health" value="${currentDeductions.healthDeduction}" class="w-full px-3 py-2 border border-brand-200 bg-brand-50/20 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-rose-600 mb-1">【${this.data.currentMonth+1}月】法院扣款 (NTD)</label>
+                                    <input type="number" id="ws-court" value="${currentDeductions.courtDeduction}" class="w-full px-3 py-2 border border-rose-200 bg-rose-50/20 rounded-xl text-sm focus:ring-2 focus:ring-rose-500 outline-none">
                                 </div>
                                 <div>
                                     <label class="block text-xs font-semibold text-slate-600 mb-1">平日加班費率 (前2小時)</label>
@@ -860,21 +929,18 @@
                                     <label class="block text-xs font-semibold text-slate-600 mb-1">休息日加班前2h倍率</label>
                                     <input type="number" step="0.01" id="ws-rest1" value="${settings.restDayRate1 || 1.34}" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none">
                                 </div>
-                                <div>
-                                    <label class="block text-xs font-semibold text-slate-600 mb-1">休息日加班第3-8h倍率</label>
-                                    <input type="number" step="0.01" id="ws-rest2" value="${settings.restDayRate2 || 1.67}" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none">
-                                </div>
-                                <div class="flex items-end">
+
+                                <div class="col-span-1 md:col-span-2 lg:col-span-3 flex items-end">
                                     <button type="submit" class="w-full py-2.5 bg-brand-500 text-white text-sm font-semibold rounded-xl hover:bg-brand-600 transition shadow-sm">
-                                        儲存設定與扣款
+                                        儲存【${this.data.currentYear}年${this.data.currentMonth+1}月】當月實際收入與扣款
                                     </button>
                                 </div>
                             </form>
 
                             <div class="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 grid grid-cols-1 md:grid-cols-3 gap-2">
                                 <div><span class="font-semibold text-slate-800">標準時薪試算：</span>≈ NT$ ${hourly.toFixed(1)} / h</div>
-                                <div><span class="font-semibold text-slate-800">每月總法定扣款：</span>NT$ ${(parseFloat(settings.laborInsuranceDeduction||0) + parseFloat(settings.healthInsuranceDeduction||0)).toLocaleString()}</div>
-                                <div><span class="font-semibold text-slate-800">休息日加班費率：</span>1-2h (${settings.restDayRate1||1.34}x) / 3-8h (${settings.restDayRate2||1.67}x)</div>
+                                <div><span class="font-semibold text-slate-800">【${this.data.currentMonth+1}月】扣款總計：</span>NT$ ${(currentDeductions.laborDeduction + currentDeductions.healthDeduction + currentDeductions.courtDeduction).toLocaleString()} (勞保$${currentDeductions.laborDeduction} + 健保$${currentDeductions.healthDeduction} + 法院$${currentDeductions.courtDeduction})</div>
+                                <div><span class="font-semibold text-slate-800">【${this.data.currentMonth+1}月】正職淨薪帶入金額：</span>NT$ ${currentActualIncome.toLocaleString()}</div>
                             </div>
                         </div>
                     </div>
@@ -1219,13 +1285,28 @@
                 this.data.workSettings.onboardingDate = document.getElementById('ws-onboarding').value;
                 this.data.workSettings.monthlySalary = parseFloat(document.getElementById('ws-salary').value) || 0;
                 this.data.workSettings.dailyHours = parseFloat(document.getElementById('ws-hours').value) || 8;
-                this.data.workSettings.laborInsuranceDeduction = parseFloat(document.getElementById('ws-labor').value) || 0;
-                this.data.workSettings.healthInsuranceDeduction = parseFloat(document.getElementById('ws-health').value) || 0;
+                
+                const laborVal = parseFloat(document.getElementById('ws-labor').value) || 0;
+                const healthVal = parseFloat(document.getElementById('ws-health').value) || 0;
+                const courtVal = parseFloat(document.getElementById('ws-court').value) || 0;
+                const actualIncomeVal = parseFloat(document.getElementById('ws-actual-income').value) || 0;
+                
+                const monthKey = `${this.data.currentYear}-${String(this.data.currentMonth + 1).padStart(2, '0')}`;
+                
+                // 獨立儲存當月的勞保、健保、法院扣款
+                this.data.monthlyDeductions[monthKey] = {
+                    labor: laborVal,
+                    health: healthVal,
+                    court: courtVal
+                };
+
+                // 獨立儲存當月工作分頁的「當月總實際收入」
+                this.data.monthlyActualIncomes[monthKey] = actualIncomeVal;
+
                 this.data.workSettings.overtimeRate1 = parseFloat(document.getElementById('ws-ot1').value) || 1.34;
                 this.data.workSettings.restDayRate1 = parseFloat(document.getElementById('ws-rest1').value) || 1.34;
-                this.data.workSettings.restDayRate2 = parseFloat(document.getElementById('ws-rest2').value) || 1.67;
                 this.saveState();
-                showToast('工作薪資、入職日期與勞健保設定已更新', 'check-circle');
+                showToast(`已更新【${this.data.currentYear}年${this.data.currentMonth+1}月】實際收入與扣款`, 'check-circle');
             }
 
             openWorkRecordModal() {
