@@ -1,0 +1,1475 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>個人工作與生活管理系統 - 建中的系統</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0284c7',
+                            600: '#0369a1',
+                            700: '#075985',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .tab-active { color: #0284c7; font-weight: 600; border-bottom: 2px solid #0284c7; }
+        @media (max-width: 768px) {
+            .tab-active { border-bottom: none; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col justify-between pb-16 md:pb-0">
+
+    <!-- Top Navigation for Desktop -->
+    <header class="hidden md:block bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-brand-500 text-white rounded-xl shadow-md">
+                        <i data-lucide="layout-dashboard" class="w-6 h-6"></i>
+                    </div>
+                    <span class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-brand-600 to-sky-700">建中的系統</span>
+                </div>
+                <nav class="flex space-x-1" id="desktop-nav">
+                    <!-- Nav Items dynamically injected -->
+                </nav>
+                <div class="flex items-center gap-2">
+                    <button onclick="app.exportData()" title="匯出 JSON" class="p-2 text-slate-500 hover:text-brand-600 hover:bg-slate-100 rounded-lg transition">
+                        <i data-lucide="download" class="w-5 h-5"></i>
+                    </button>
+                    <button onclick="document.getElementById('import-file').click()" title="匯入 JSON" class="p-2 text-slate-500 hover:text-brand-600 hover:bg-slate-100 rounded-lg transition">
+                        <i data-lucide="upload" class="w-5 h-5"></i>
+                    </button>
+                    <input type="file" id="import-file" class="hidden" accept=".json" onchange="app.importData(event)">
+                    <button onclick="app.resetDemoData()" title="重置為示範資料" class="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition">
+                        <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Bottom Navigation for Mobile -->
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-40 px-2 py-1 flex justify-around items-center shadow-lg" id="mobile-nav">
+        <!-- Mobile Nav Items -->
+    </nav>
+
+    <!-- Main Content Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-grow w-full">
+        <!-- Global Date Selector / Controls Header -->
+        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <button onclick="app.changeMonth(-1)" class="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition">
+                    <i data-lucide="chevron-left" class="w-5 h-5"></i>
+                </button>
+                <h2 id="current-month-display" class="text-xl font-bold text-slate-800 min-w-[140px] text-center">YYYY年 MM月</h2>
+                <button onclick="app.changeMonth(1)" class="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition">
+                    <i data-lucide="chevron-right" class="w-5 h-5"></i>
+                </button>
+                <button onclick="app.resetToToday()" class="px-3 py-1.5 text-xs font-semibold bg-brand-50 text-brand-600 hover:bg-brand-100 rounded-lg transition">
+                    返回今天
+                </button>
+            </div>
+            <div class="text-xs text-slate-500 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-200">
+                <i data-lucide="calendar" class="w-3.5 h-3.5 inline mr-1"></i>週首：週一 (Monday First)
+            </div>
+        </div>
+
+        <!-- Dynamic View Sections Container -->
+        <div id="app-view">
+            <!-- Dynamic content injected here -->
+        </div>
+    </main>
+
+    <!-- Modal Container -->
+    <div id="modal-backdrop" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div id="modal-content" class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl transform transition-all border border-slate-100 max-h-[90vh] overflow-y-auto">
+            <!-- Modal Body Injected Dynamically -->
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-5 right-5 z-50 transform translate-y-[-100px] opacity-0 transition-all duration-300 bg-slate-800 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3">
+        <i data-lucide="info" id="toast-icon" class="w-5 h-5 text-brand-500"></i>
+        <span id="toast-message" class="text-sm font-medium">通知訊息</span>
+    </div>
+
+    <script>
+
+        // Helper Date Utility
+        const DateUtils = {
+            formatYMD(date) {
+                const y = date.getFullYear();
+                const m = String(date.getMonth() + 1).padStart(2, '0');
+                const d = String(date.getDate()).padStart(2, '0');
+                return `${y}-${m}-${d}`;
+            },
+            getDaysInMonth(year, month) {
+                return new Date(year, month + 1, 0).getDate();
+            },
+            getCalendarGrid(year, month) {
+                const firstDay = new Date(year, month, 1);
+                let dayOfWeek = firstDay.getDay(); 
+                dayOfWeek = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Mon=0 ... Sun=6
+
+                const daysInMonth = this.getDaysInMonth(year, month);
+                const prevMonthDays = new Date(year, month, 0).getDate();
+
+                const grid = [];
+                for (let i = dayOfWeek - 1; i >= 0; i--) {
+                    grid.push({
+                        day: prevMonthDays - i,
+                        currentMonth: false,
+                        dateStr: this.formatYMD(new Date(year, month - 1, prevMonthDays - i))
+                    });
+                }
+                for (let d = 1; d <= daysInMonth; d++) {
+                    grid.push({
+                        day: d,
+                        currentMonth: true,
+                        dateStr: this.formatYMD(new Date(year, month, d))
+                    });
+                }
+                const totalCells = grid.length > 35 ? 42 : 35;
+                const remaining = totalCells - grid.length;
+                for (let d = 1; d <= remaining; d++) {
+                    grid.push({
+                        day: d,
+                        currentMonth: false,
+                        dateStr: this.formatYMD(new Date(year, month + 1, d))
+                    });
+                }
+                return grid;
+            }
+        };
+
+        const NAV_ITEMS = [
+            { id: 'dashboard', label: '總表', icon: 'layout-dashboard' },
+            { id: 'work', label: '工作', icon: 'briefcase' },
+            { id: 'parttime', label: '兼職', icon: 'clock' },
+            { id: 'schedule', label: '行程與當日', icon: 'calendar' },
+            { id: 'community', label: '社勞', icon: 'heart-handshake' },
+        ];
+
+        const INITIAL_STATE = {
+            currentTab: 'dashboard',
+            currentYear: new Date().getFullYear(),
+            currentMonth: new Date().getMonth(),
+            workSettings: {
+                monthlySalary: 38000,
+                dailyHours: 8,
+                overtimeRate1: 1.34, // 平日加班前2小時
+                restDayRate1: 1.34,  // 休息日前2小時
+                restDayRate2: 1.67   // 休息日第3-8小時
+            },
+            workRecords: {
+                // date: { type: 'work'|'rest_overtime'|'leave', checkIn, checkOut, leaveType, overtimeHours, restDayHours, memo }
+                [`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-02`]: {
+                    type: 'work', checkIn: '09:00', checkOut: '19:30', overtimeHours: 2.5, memo: '處理季報資料'
+                },
+                [`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-05`]: {
+                    type: 'leave', leaveType: '特休', memo: '身體微恙休息'
+                },
+                [`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-12`]: {
+                    type: 'rest_overtime', restDayHours: 6, memo: '週六專案緊急加班'
+                }
+            },
+            partTimeSettings: {
+                hourlyRate: 190,
+                holidayRateMultiplier: 2.0
+            },
+            partTimeRecords: [
+                { id: 'pt1', date: `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-03`, shiftTime: '18:00-22:30', shiftType: '晚班', hours: 4.5, isNationalHoliday: false, memo: '晚班咖啡廳打工' },
+                { id: 'pt2', date: `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-10`, shiftTime: '10:00-16:00', shiftType: '中班', hours: 6.0, isNationalHoliday: true, memo: '國定假日支援門市' }
+            ],
+            schedules: [
+                { id: 'sc1', date: `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-15`, title: '陽明山踏青賞花', category: 'Trip', memo: '記得攜帶雨具' },
+                { id: 'sc2', date: `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-20`, title: '高中同學聚餐', category: 'Friends', memo: '預約晚上7點' }
+            ],
+            extraIncomes: [
+                { id: 'ei1', date: `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-02`, foodDelivery: 450, tips: 100, other: 0, memo: '外送兼職3單' },
+                { id: 'ei2', date: `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-08`, foodDelivery: 600, tips: 50, other: 200, memo: '二手書出清與外送' }
+            ],
+            communitySettings: {
+                annualTargetHours: 100
+            },
+            communityRecords: [
+                { id: 'cs1', date: `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-04`, title: '社區圖書館書籍整理', hours: 4, status: 'completed', memo: '完成4小時協助分類' },
+                { id: 'cs2', date: `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-18`, title: '環境清潔志工', hours: 3, status: 'pending', memo: '已預約，待服務' },
+                { id: 'cs3', date: `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-25`, title: '長者關懷陪伴', hours: 5, status: 'pending', memo: '週六上午志工活動' }
+            ]
+        };
+
+        class AppState {
+            constructor() {
+                this.loadState();
+            }
+
+            loadState() {
+                const saved = localStorage.getItem('WORKLIFE_HUB_DATA_V2');
+                if (saved) {
+                    try {
+                        this.data = JSON.parse(saved);
+                    } catch (e) {
+                        console.error('Failed to parse state, resetting...', e);
+                        this.data = JSON.parse(JSON.stringify(INITIAL_STATE));
+                    }
+                } else {
+                    this.data = JSON.parse(JSON.stringify(INITIAL_STATE));
+                }
+            }
+
+            saveState() {
+                localStorage.setItem('WORKLIFE_HUB_DATA_V2', JSON.stringify(this.data));
+                this.render();
+            }
+
+            resetDemo() {
+                this.data = JSON.parse(JSON.stringify(INITIAL_STATE));
+                this.saveState();
+                showToast('已重置為預設示範資料', 'rotate-ccw');
+            }
+
+            render() {
+                document.getElementById('current-month-display').innerText = 
+                    `${this.data.currentYear}年 ${String(this.data.currentMonth + 1).padStart(2, '0')}月`;
+
+                this.renderNav();
+
+                const viewEl = document.getElementById('app-view');
+                switch (this.data.currentTab) {
+                    case 'dashboard': viewEl.innerHTML = this.renderDashboardView(); break;
+                    case 'work': viewEl.innerHTML = this.renderWorkView(); break;
+                    case 'parttime': viewEl.innerHTML = this.renderPartTimeView(); break;
+                    case 'schedule': viewEl.innerHTML = this.renderScheduleAndIncomeView(); break;
+                    case 'community': viewEl.innerHTML = this.renderCommunityView(); break;
+                    default: viewEl.innerHTML = this.renderDashboardView();
+                }
+
+                lucide.createIcons();
+            }
+
+            renderNav() {
+                const desktopContainer = document.getElementById('desktop-nav');
+                const mobileContainer = document.getElementById('mobile-nav');
+
+                desktopContainer.innerHTML = NAV_ITEMS.map(item => `
+                    <button onclick="app.setTab('${item.id}')" 
+                        class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition ${
+                            this.data.currentTab === item.id 
+                            ? 'bg-brand-50 text-brand-600 font-semibold shadow-sm' 
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                        }">
+                        <i data-lucide="${item.icon}" class="w-4 h-4"></i>
+                        ${item.label}
+                    </button>
+                `).join('');
+
+                mobileContainer.innerHTML = NAV_ITEMS.map(item => `
+                    <button onclick="app.setTab('${item.id}')" 
+                        class="flex flex-col items-center py-1 px-3 rounded-lg text-xs transition ${
+                            this.data.currentTab === item.id ? 'text-brand-600 font-bold' : 'text-slate-500'
+                        }">
+                        <i data-lucide="${item.icon}" class="w-5 h-5 mb-0.5"></i>
+                        <span>${item.label}</span>
+                    </button>
+                `).join('');
+            }
+
+            setTab(tabId) {
+                this.data.currentTab = tabId;
+                this.saveState();
+            }
+
+            changeMonth(delta) {
+                let m = this.data.currentMonth + delta;
+                let y = this.data.currentYear;
+                if (m < 0) { m = 11; y--; }
+                if (m > 11) { m = 0; y++; }
+                this.data.currentMonth = m;
+                this.data.currentYear = y;
+                this.saveState();
+            }
+
+            resetToToday() {
+                const today = new Date();
+                this.data.currentYear = today.getFullYear();
+                this.data.currentMonth = today.getMonth();
+                this.saveState();
+            }
+
+            getMonthlyCalculations() {
+                const prefix = `${this.data.currentYear}-${String(this.data.currentMonth + 1).padStart(2, '0')}`;
+                
+                // 1. Work Income (Base + Overtime + Rest Day Overtime)
+                const hourlyWorkRate = (this.data.workSettings.monthlySalary / 30 / this.data.workSettings.dailyHours);
+                let overtimeIncome = 0;
+                let leaveDays = 0;
+
+                Object.entries(this.data.workRecords).forEach(([dateStr, record]) => {
+                    if (dateStr.startsWith(prefix)) {
+                        if (record.type === 'work' && record.overtimeHours) {
+                            overtimeIncome += parseFloat(record.overtimeHours) * hourlyWorkRate * (this.data.workSettings.overtimeRate1 || 1.34);
+                        } else if (record.type === 'rest_overtime' && record.restDayHours) {
+                            const hrs = parseFloat(record.restDayHours);
+                            const r1 = this.data.workSettings.restDayRate1 || 1.34;
+                            const r2 = this.data.workSettings.restDayRate2 || 1.67;
+                            if (hrs <= 2) {
+                                overtimeIncome += hrs * hourlyWorkRate * r1;
+                            } else {
+                                overtimeIncome += (2 * hourlyWorkRate * r1) + ((hrs - 2) * hourlyWorkRate * r2);
+                            }
+                        } else if (record.type === 'leave') {
+                            leaveDays += 1;
+                        }
+                    }
+                });
+                const totalWorkIncome = Math.round(this.data.workSettings.monthlySalary + overtimeIncome);
+
+                // 2. Part-Time Income
+                let totalPtIncome = 0;
+                this.data.partTimeRecords.forEach(rec => {
+                    if (rec.date.startsWith(prefix)) {
+                        const rate = rec.isNationalHoliday 
+                            ? this.data.partTimeSettings.hourlyRate * this.data.partTimeSettings.holidayRateMultiplier 
+                            : this.data.partTimeSettings.hourlyRate;
+                        totalPtIncome += (rec.hours || 0) * rate;
+                    }
+                });
+                totalPtIncome = Math.round(totalPtIncome);
+
+                // 3. Extra Income
+                let totalExtraIncome = 0;
+                this.data.extraIncomes.forEach(rec => {
+                    if (rec.date.startsWith(prefix)) {
+                        totalExtraIncome += (rec.foodDelivery || 0) + (rec.tips || 0) + (rec.other || 0);
+                    }
+                });
+
+                // 4. Community Service Completed Hours
+                let monthlyCompletedCsHours = 0;
+                this.data.communityRecords.forEach(rec => {
+                    if (rec.date.startsWith(prefix) && rec.status === 'completed') {
+                        monthlyCompletedCsHours += (rec.hours || 0);
+                    }
+                });
+
+                let annualCompletedCsHours = 0;
+                const yearPrefix = `${this.data.currentYear}-`;
+                this.data.communityRecords.forEach(rec => {
+                    if (rec.date.startsWith(yearPrefix) && rec.status === 'completed') {
+                        annualCompletedCsHours += (rec.hours || 0);
+                    }
+                });
+
+                return {
+                    workIncome: totalWorkIncome,
+                    partTimeIncome: totalPtIncome,
+                    extraIncome: totalExtraIncome,
+                    totalIncome: totalWorkIncome + totalPtIncome + totalExtraIncome,
+                    leaveDays,
+                    monthlyCsHours: monthlyCompletedCsHours,
+                    annualCsHours: annualCompletedCsHours,
+                    csTarget: this.data.communitySettings.annualTargetHours
+                };
+            }
+
+            renderDashboardView() {
+                const stats = this.getMonthlyCalculations();
+                const grid = DateUtils.getCalendarGrid(this.data.currentYear, this.data.currentMonth);
+                const csProgress = Math.min(100, Math.round((stats.annualCsHours / stats.csTarget) * 100));
+
+                return `
+                    <div class="space-y-6">
+                        <!-- Top Overview Stats Grid -->
+                        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
+                                <span class="text-xs text-slate-500 font-medium">總月收入預估</span>
+                                <span class="text-xl font-bold text-slate-900 mt-2">$${stats.totalIncome.toLocaleString()}</span>
+                                <span class="text-[10px] text-emerald-600 mt-1 flex items-center gap-0.5"><i data-lucide="trending-up" class="w-3 h-3"></i>含全部來源</span>
+                            </div>
+                            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
+                                <span class="text-xs text-slate-500 font-medium">工作正職收入</span>
+                                <span class="text-xl font-bold text-brand-600 mt-2">$${stats.workIncome.toLocaleString()}</span>
+                                <span class="text-[10px] text-slate-400 mt-1">含平日/休息日加班</span>
+                            </div>
+                            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
+                                <span class="text-xs text-slate-500 font-medium">兼職打工收入</span>
+                                <span class="text-xl font-bold text-indigo-600 mt-2">$${stats.partTimeIncome.toLocaleString()}</span>
+                                <span class="text-[10px] text-slate-400 mt-1">國定假日雙倍試算</span>
+                            </div>
+                            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
+                                <span class="text-xs text-slate-500 font-medium">當日/外送小費</span>
+                                <span class="text-xl font-bold text-amber-600 mt-2">$${stats.extraIncome.toLocaleString()}</span>
+                                <span class="text-[10px] text-slate-400 mt-1">額外獨立運營</span>
+                            </div>
+                            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
+                                <span class="text-xs text-slate-500 font-medium">當月休假總天數</span>
+                                <span class="text-xl font-bold text-rose-600 mt-2">${stats.leaveDays} 天</span>
+                                <span class="text-[10px] text-slate-400 mt-1">特休/請假紀錄</span>
+                            </div>
+                            <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
+                                <span class="text-xs text-slate-500 font-medium">社勞已完成 (年度)</span>
+                                <span class="text-xl font-bold text-emerald-600 mt-2">${stats.annualCsHours} / ${stats.csTarget}h</span>
+                                <div class="w-full bg-slate-100 h-1.5 rounded-full mt-2 overflow-hidden">
+                                    <div class="bg-emerald-500 h-full rounded-full" style="width: ${csProgress}%"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Integrated Calendar View -->
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                    <i data-lucide="calendar-days" class="w-5 h-5 text-brand-500"></i>
+                                    綜合月曆 (Monday First)
+                                </h3>
+                                <div class="flex flex-wrap gap-2 text-xs">
+                                    <span class="px-2 py-0.5 rounded bg-brand-100 text-brand-700">工作/請假/休息加班</span>
+                                    <span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-700">兼職時段</span>
+                                    <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-700">行程</span>
+                                    <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">已核入社勞</span>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-7 text-center font-semibold text-slate-500 text-sm py-2 border-b border-slate-100">
+                                <div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div class="text-rose-500">六</div><div class="text-rose-500">日</div>
+                            </div>
+
+                            <div class="grid grid-cols-7 gap-1 md:gap-2 mt-2">
+                                ${grid.map(cell => {
+                                    const dateStr = cell.dateStr;
+                                    const isToday = dateStr === DateUtils.formatYMD(new Date());
+
+                                    const work = this.data.workRecords[dateStr];
+                                    const pts = this.data.partTimeRecords.filter(p => p.date === dateStr);
+                                    const schs = this.data.schedules.filter(s => s.date === dateStr);
+                                    const csCompleted = this.data.communityRecords.filter(c => c.date === dateStr && c.status === 'completed');
+
+                                    return `
+                                        <div class="min-h-[85px] md:min-h-[105px] p-1 md:p-2 border rounded-xl flex flex-col justify-between transition ${
+                                            cell.currentMonth ? 'bg-white border-slate-100' : 'bg-slate-50/50 border-transparent text-slate-300'
+                                        } ${isToday ? 'ring-2 ring-brand-500 bg-brand-50/20' : ''}">
+                                            <div class="flex justify-between items-center">
+                                                <span class="text-xs font-semibold ${isToday ? 'bg-brand-500 text-white px-1.5 py-0.5 rounded-full' : cell.currentMonth ? 'text-slate-700' : 'text-slate-300'}">
+                                                    ${cell.day}
+                                                </span>
+                                            </div>
+                                            
+                                            <div class="space-y-1 my-1 flex-grow overflow-hidden text-[10px]">
+                                                ${work ? `
+                                                    <div class="px-1 py-0.5 rounded truncate ${
+                                                        work.type==='work' ? 'bg-brand-50 text-brand-700' : 
+                                                        work.type==='rest_overtime' ? 'bg-purple-50 text-purple-700 font-semibold' : 'bg-rose-50 text-rose-700'
+                                                    }">
+                                                        ${work.type==='work'? `班:${work.checkIn||''}` : work.type==='rest_overtime'? `休加:${work.restDayHours}h` : `假:${work.leaveType||''}`}
+                                                    </div>
+                                                `:''}
+                                                ${pts.map(p => `
+                                                    <div class="px-1 py-0.5 rounded bg-indigo-50 text-indigo-700 font-medium truncate" title="${p.shiftType || '兼職'}: ${p.shiftTime || p.hours + 'h'}">
+                                                        PT: ${p.shiftTime || (p.shiftType ? p.shiftType : p.hours + 'h')}
+                                                    </div>
+                                                `).join('')}
+                                                ${schs.map(s => `
+                                                    <div class="px-1 py-0.5 rounded bg-amber-50 text-amber-800 truncate">
+                                                        ${s.title}
+                                                    </div>
+                                                `).join('')}
+                                                ${csCompleted.map(c => `
+                                                    <div class="px-1 py-0.5 rounded bg-emerald-50 text-emerald-800 font-medium truncate">
+                                                        社勞:${c.hours}h
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            renderWorkView() {
+                const settings = this.data.workSettings;
+                const monthPrefix = `${this.data.currentYear}-${String(this.data.currentMonth + 1).padStart(2, '0')}`;
+                
+                const records = Object.entries(this.data.workRecords)
+                    .filter(([date]) => date.startsWith(monthPrefix))
+                    .sort((a,b) => a[0].localeCompare(b[0]));
+
+                const hourly = settings.monthlySalary / 30 / settings.dailyHours;
+
+                return `
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Settings Column -->
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
+                            <div>
+                                <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                    <i data-lucide="settings" class="w-5 h-5 text-brand-500"></i> 正職薪資與加班費率設定
+                                </h3>
+                                <form onsubmit="app.saveWorkSettings(event)" class="space-y-4">
+                                    <div>
+                                        <label class="block text-xs font-semibold text-slate-600 mb-1">月薪 (NTD)</label>
+                                        <input type="number" id="ws-salary" value="${settings.monthlySalary}" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-semibold text-slate-600 mb-1">每日標準工時 (小時)</label>
+                                        <input type="number" step="0.5" id="ws-hours" value="${settings.dailyHours}" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-semibold text-slate-600 mb-1">平日加班費率 (前2小時)</label>
+                                        <input type="number" step="0.01" id="ws-ot1" value="${settings.overtimeRate1 || 1.34}" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none">
+                                    </div>
+                                    <div class="pt-2 border-t border-slate-100">
+                                        <span class="block text-xs font-bold text-purple-700 mb-2">休息日加班費率機制 (比照勞基法)</span>
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <label class="block text-[11px] font-semibold text-slate-500 mb-1">前 2 小時倍率</label>
+                                                <input type="number" step="0.01" id="ws-rest1" value="${settings.restDayRate1 || 1.34}" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none">
+                                            </div>
+                                            <div>
+                                                <label class="block text-[11px] font-semibold text-slate-500 mb-1">第 3~8 小時倍率</label>
+                                                <input type="number" step="0.01" id="ws-rest2" value="${settings.restDayRate2 || 1.67}" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button type="submit" class="w-full py-2.5 bg-brand-500 text-white text-sm font-semibold rounded-xl hover:bg-brand-600 transition shadow-sm">
+                                        儲存工作設定
+                                    </button>
+                                </form>
+                            </div>
+                            <div class="mt-6 p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500 space-y-1">
+                                <p class="font-semibold text-slate-700">費率參考試算：</p>
+                                <p>換算時薪 ≈ NT$ ${hourly.toFixed(1)} / h</p>
+                                <p>休息日加班前2h ≈ NT$ ${(hourly * (settings.restDayRate1 || 1.34)).toFixed(1)} / h</p>
+                                <p>休息日加班第3-8h ≈ NT$ ${(hourly * (settings.restDayRate2 || 1.67)).toFixed(1)} / h</p>
+                            </div>
+                        </div>
+
+                        <!-- Daily Work Log -->
+                        <div class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                            <div class="flex justify-between items-center mb-6">
+                                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                    <i data-lucide="clock" class="w-5 h-5 text-brand-500"></i> 排班打卡與加班紀錄
+                                </h3>
+                                <button onclick="app.openWorkRecordModal()" class="px-4 py-2 bg-brand-500 text-white rounded-xl text-sm font-semibold hover:bg-brand-600 transition flex items-center gap-2 shadow-sm">
+                                    <i data-lucide="plus" class="w-4 h-4"></i> 新增/打卡紀錄
+                                </button>
+                            </div>
+
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr class="border-b border-slate-100 text-xs font-semibold text-slate-400">
+                                            <th class="py-3 px-2">日期</th>
+                                            <th class="py-3 px-2">類型</th>
+                                            <th class="py-3 px-2">出勤/請假內容</th>
+                                            <th class="py-3 px-2">加班/休息日工時</th>
+                                            <th class="py-3 px-2">備忘錄</th>
+                                            <th class="py-3 px-2 text-right">操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100 text-sm">
+                                        ${records.length === 0 ? `
+                                            <tr><td colspan="6" class="py-8 text-center text-slate-400 text-sm">當月尚無出勤或加班紀錄</td></tr>
+                                        ` : records.map(([date, rec]) => `
+                                            <tr class="hover:bg-slate-50/50 transition">
+                                                <td class="py-3 px-2 font-medium text-slate-800">${date}</td>
+                                                <td class="py-3 px-2">
+                                                    <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                                        rec.type === 'work' ? 'bg-emerald-100 text-emerald-700' :
+                                                        rec.type === 'rest_overtime' ? 'bg-purple-100 text-purple-700' : 'bg-rose-100 text-rose-700'
+                                                    }">
+                                                        ${rec.type === 'work' ? '正常上班' : rec.type === 'rest_overtime' ? '休息日加班' : '休假/請假'}
+                                                    </span>
+                                                </td>
+                                                <td class="py-3 px-2 text-slate-600">
+                                                    ${rec.type==='work' ? `${rec.checkIn || '--'} ~ ${rec.checkOut || '--'}` : 
+                                                      rec.type==='rest_overtime' ? `<span class="text-purple-700 font-medium">休息日出勤 ${rec.restDayHours} 小時</span>` :
+                                                      `<span class="font-medium text-rose-600">${rec.leaveType}</span>`}
+                                                </td>
+                                                <td class="py-3 px-2 font-semibold">
+                                                    ${rec.type === 'work' ? (rec.overtimeHours ? `<span class="text-brand-600">平日 +${rec.overtimeHours}h</span>` : '-') :
+                                                      rec.type === 'rest_overtime' ? `<span class="text-purple-600">休息日 +${rec.restDayHours}h</span>` : '-'}
+                                                </td>
+                                                <td class="py-3 px-2 text-slate-500 text-xs max-w-[150px] truncate">${rec.memo || '-'}</td>
+                                                <td class="py-3 px-2 text-right">
+                                                    <button onclick="app.deleteWorkRecord('${date}')" class="p-1 text-slate-400 hover:text-rose-600 transition">
+                                                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            renderPartTimeView() {
+                const settings = this.data.partTimeSettings;
+                const monthPrefix = `${this.data.currentYear}-${String(this.data.currentMonth + 1).padStart(2, '0')}`;
+                
+                const records = this.data.partTimeRecords
+                    .filter(r => r.date.startsWith(monthPrefix))
+                    .sort((a,b) => a.date.localeCompare(b.date));
+
+                return `
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Part Time Settings -->
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                            <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                <i data-lucide="dollar-sign" class="w-5 h-5 text-indigo-500"></i> 兼職時薪設定
+                            </h3>
+                            <form onsubmit="app.savePartTimeSettings(event)" class="space-y-4">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1">基本時薪 (NTD)</label>
+                                    <input type="number" id="pt-rate" value="${settings.hourlyRate}" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1">國定假日加倍倍率</label>
+                                    <input type="number" step="0.1" id="pt-holiday-mult" value="${settings.holidayRateMultiplier}" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                                </div>
+                                <button type="submit" class="w-full py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 transition shadow-sm">
+                                    儲存兼職設定
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Part Time Log -->
+                        <div class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                            <div class="flex justify-between items-center mb-6">
+                                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                    <i data-lucide="briefcase" class="w-5 h-5 text-indigo-500"></i> 兼職排班與薪資試算
+                                </h3>
+                                <button onclick="app.openPartTimeModal()" class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition flex items-center gap-2 shadow-sm">
+                                    <i data-lucide="plus" class="w-4 h-4"></i> 新增兼職紀錄
+                                </button>
+                            </div>
+
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr class="border-b border-slate-100 text-xs font-semibold text-slate-400">
+                                            <th class="py-3 px-2">日期</th>
+                                            <th class="py-3 px-2">上班時段安排</th>
+                                            <th class="py-3 px-2">實際工時</th>
+                                            <th class="py-3 px-2">國定雙倍</th>
+                                            <th class="py-3 px-2">試算金額</th>
+                                            <th class="py-3 px-2">備註</th>
+                                            <th class="py-3 px-2 text-right">操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100 text-sm">
+                                        ${records.length === 0 ? `
+                                            <tr><td colspan="7" class="py-8 text-center text-slate-400 text-sm">當月尚無兼職紀錄</td></tr>
+                                        ` : records.map(rec => {
+                                            const rate = rec.isNationalHoliday ? settings.hourlyRate * settings.holidayRateMultiplier : settings.hourlyRate;
+                                            const total = rec.hours * rate;
+                                            return `
+                                                <tr class="hover:bg-slate-50/50 transition">
+                                                    <td class="py-3 px-2 font-medium text-slate-800">${rec.date}</td>
+                                                    <td class="py-3 px-2">
+                                                        <div class="flex items-center gap-1.5">
+                                                            <span class="px-2 py-0.5 rounded text-xs bg-slate-100 font-semibold text-slate-700">${rec.shiftType || '自訂'}</span>
+                                                            <span class="text-xs font-medium text-indigo-600">${rec.shiftTime || '-'}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td class="py-3 px-2 font-semibold text-slate-700">${rec.hours} 小時</td>
+                                                    <td class="py-3 px-2">
+                                                        ${rec.isNationalHoliday ? '<span class="px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-800 font-bold">是</span>' : '<span class="text-xs text-slate-400">否</span>'}
+                                                    </td>
+                                                    <td class="py-3 px-2 font-bold text-indigo-600">$${Math.round(total).toLocaleString()}</td>
+                                                    <td class="py-3 px-2 text-slate-500 text-xs max-w-[120px] truncate">${rec.memo || '-'}</td>
+                                                    <td class="py-3 px-2 text-right">
+                                                        <button onclick="app.deletePartTimeRecord('${rec.id}')" class="p-1 text-slate-400 hover:text-rose-600 transition">
+                                                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            `;
+                                        }).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            renderScheduleAndIncomeView() {
+                const monthPrefix = `${this.data.currentYear}-${String(this.data.currentMonth + 1).padStart(2, '0')}`;
+                
+                const schedules = this.data.schedules
+                    .filter(s => s.date.startsWith(monthPrefix))
+                    .sort((a,b) => a.date.localeCompare(b.date));
+
+                const extraIncomes = this.data.extraIncomes
+                    .filter(e => e.date.startsWith(monthPrefix))
+                    .sort((a,b) => a.date.localeCompare(b.date));
+
+                const categoryColors = {
+                    Trip: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+                    Friends: 'bg-sky-100 text-sky-800 border-sky-200',
+                    Family: 'bg-purple-100 text-purple-800 border-purple-200',
+                    Tasks: 'bg-amber-100 text-amber-800 border-amber-200',
+                    Other: 'bg-slate-100 text-slate-800 border-slate-200'
+                };
+
+                return `
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Section 1: Schedule Management -->
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
+                            <div>
+                                <div class="flex justify-between items-center mb-6">
+                                    <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                        <i data-lucide="calendar" class="w-5 h-5 text-amber-500"></i> 行程規劃
+                                    </h3>
+                                    <button onclick="app.openScheduleModal()" class="px-3 py-1.5 bg-amber-500 text-white rounded-xl text-xs font-semibold hover:bg-amber-600 transition flex items-center gap-1.5 shadow-sm">
+                                        <i data-lucide="plus" class="w-4 h-4"></i> 新增行程
+                                    </button>
+                                </div>
+
+                                <div class="space-y-3">
+                                    ${schedules.length === 0 ? `
+                                        <div class="py-8 text-center text-slate-400 text-sm">當月尚無行程規劃</div>
+                                    ` : schedules.map(sch => `
+                                        <div class="p-3 rounded-xl border border-slate-100 hover:shadow-sm transition flex items-center justify-between">
+                                            <div class="space-y-1">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-xs px-2 py-0.5 rounded-full border font-medium ${categoryColors[sch.category] || categoryColors.Other}">
+                                                        ${sch.category}
+                                                    </span>
+                                                    <span class="text-xs font-semibold text-slate-400">${sch.date}</span>
+                                                </div>
+                                                <div class="text-sm font-bold text-slate-800">${sch.title}</div>
+                                                ${sch.memo ? `<div class="text-xs text-slate-500">${sch.memo}</div>` : ''}
+                                            </div>
+                                            <button onclick="app.deleteSchedule('${sch.id}')" class="p-1.5 text-slate-400 hover:text-rose-600 transition">
+                                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                            </button>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Section 2: Daily Extra Income -->
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
+                            <div>
+                                <div class="flex justify-between items-center mb-6">
+                                    <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                        <i data-lucide="bike" class="w-5 h-5 text-emerald-500"></i> 當日額外收入 (外送/小費)
+                                    </h3>
+                                    <button onclick="app.openExtraIncomeModal()" class="px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-semibold hover:bg-emerald-700 transition flex items-center gap-1.5 shadow-sm">
+                                        <i data-lucide="plus" class="w-4 h-4"></i> 紀錄當日收入
+                                    </button>
+                                </div>
+
+                                <div class="space-y-3">
+                                    ${extraIncomes.length === 0 ? `
+                                        <div class="py-8 text-center text-slate-400 text-sm">當月尚無當日額外收入紀錄</div>
+                                    ` : extraIncomes.map(inc => {
+                                        const sum = (inc.foodDelivery || 0) + (inc.tips || 0) + (inc.other || 0);
+                                        return `
+                                            <div class="p-3 rounded-xl border border-slate-100 hover:shadow-sm transition flex items-center justify-between">
+                                                <div class="space-y-1">
+                                                    <div class="text-xs font-semibold text-slate-400">${inc.date}</div>
+                                                    <div class="text-sm font-bold text-emerald-600">+ NT$ ${sum.toLocaleString()}</div>
+                                                    <div class="text-xs text-slate-500 flex gap-2">
+                                                        <span>外送: $${inc.foodDelivery||0}</span>
+                                                        <span>小費: $${inc.tips||0}</span>
+                                                        <span>其他: $${inc.other||0}</span>
+                                                    </div>
+                                                    ${inc.memo ? `<div class="text-xs text-slate-400 italic">${inc.memo}</div>` : ''}
+                                                </div>
+                                                <button onclick="app.deleteExtraIncome('${inc.id}')" class="p-1.5 text-slate-400 hover:text-rose-600 transition">
+                                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                                </button>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            renderCommunityView() {
+                const stats = this.getMonthlyCalculations();
+                const yearPrefix = `${this.data.currentYear}-`;
+
+                const records = this.data.communityRecords
+                    .filter(r => r.date.startsWith(yearPrefix))
+                    .sort((a,b) => b.date.localeCompare(a.date));
+
+                const pendingRecords = records.filter(r => r.status === 'pending');
+                const completedRecords = records.filter(r => r.status === 'completed');
+
+                const annualProgress = Math.min(100, Math.round((stats.annualCsHours / stats.csTarget) * 100));
+
+                return `
+                    <div class="space-y-6">
+                        <!-- Community Service Dashboard Card -->
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                            <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+                                <div>
+                                    <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                        <i data-lucide="heart-handshake" class="w-5 h-5 text-emerald-500"></i>
+                                        社會勞動服務進度看板
+                                    </h3>
+                                    <p class="text-xs text-slate-500">預計安排不納入時數累積，需點擊「確認完成」核入時數</p>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <button onclick="app.openCsTargetModal()" class="px-3 py-1.5 text-xs border border-slate-200 rounded-xl hover:bg-slate-50 font-medium transition">
+                                        設定年度目標 (${stats.csTarget}h)
+                                    </button>
+                                    <button onclick="app.openCommunityModal()" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 transition flex items-center gap-2 shadow-sm">
+                                        <i data-lucide="plus" class="w-4 h-4"></i> 新增社勞紀錄
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 my-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                <div>
+                                    <span class="text-xs text-slate-500">當月已核入完成</span>
+                                    <div class="text-2xl font-bold text-emerald-600 mt-1">${stats.monthlyCsHours} 小時</div>
+                                </div>
+                                <div>
+                                    <span class="text-xs text-slate-500">年度總已核入完成</span>
+                                    <div class="text-2xl font-bold text-slate-800 mt-1">${stats.annualCsHours} 小時</div>
+                                </div>
+                                <div>
+                                    <span class="text-xs text-slate-500">年度目標剩餘</span>
+                                    <div class="text-2xl font-bold text-amber-600 mt-1">${Math.max(0, stats.csTarget - stats.annualCsHours)} 小時</div>
+                                </div>
+                                <div>
+                                    <span class="text-xs text-slate-500">年度完成度</span>
+                                    <div class="text-2xl font-bold text-brand-600 mt-1">${annualProgress}%</div>
+                                </div>
+                            </div>
+
+                            <div class="space-y-1">
+                                <div class="flex justify-between text-xs font-semibold text-slate-500">
+                                    <span>年度進度條</span>
+                                    <span>${stats.annualCsHours} / ${stats.csTarget} 小時</span>
+                                </div>
+                                <div class="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
+                                    <div class="bg-gradient-to-r from-emerald-500 to-teal-600 h-full rounded-full transition-all duration-500" style="width: ${annualProgress}%"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Records List Section -->
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <!-- Pending CS -->
+                            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                                <h4 class="text-md font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> 預計安排 (Pending)
+                                </h4>
+                                <div class="space-y-3">
+                                    ${pendingRecords.length === 0 ? `
+                                        <div class="py-8 text-center text-slate-400 text-sm">目前無待完成的預計安排</div>
+                                    ` : pendingRecords.map(rec => `
+                                        <div class="p-4 rounded-xl border border-amber-200 bg-amber-50/30 flex items-center justify-between gap-4">
+                                            <div class="space-y-1">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
+                                                        預計：${rec.hours} 小時
+                                                    </span>
+                                                    <span class="text-xs text-slate-400 font-medium">${rec.date}</span>
+                                                </div>
+                                                <div class="text-sm font-bold text-slate-800">${rec.title}</div>
+                                                ${rec.memo ? `<div class="text-xs text-slate-500">${rec.memo}</div>` : ''}
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <button onclick="app.confirmCsCompletion('${rec.id}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition shadow-sm whitespace-nowrap">
+                                                    確認完成（核入時數）
+                                                </button>
+                                                <button onclick="app.deleteCommunityRecord('${rec.id}')" class="p-1 text-slate-400 hover:text-rose-600 transition">
+                                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+
+                            <!-- Completed CS -->
+                            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                                <h4 class="text-md font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> 已完成紀錄 (Completed)
+                                </h4>
+                                <div class="space-y-3">
+                                    ${completedRecords.length === 0 ? `
+                                        <div class="py-8 text-center text-slate-400 text-sm">年度尚無已核入的完成紀錄</div>
+                                    ` : completedRecords.map(rec => `
+                                        <div class="p-4 rounded-xl border border-emerald-100 bg-emerald-50/20 flex items-center justify-between gap-4">
+                                            <div class="space-y-1">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                                                        已核入：${rec.hours} 小時
+                                                    </span>
+                                                    <span class="text-xs text-slate-400 font-medium">${rec.date}</span>
+                                                </div>
+                                                <div class="text-sm font-bold text-slate-800">${rec.title}</div>
+                                                ${rec.memo ? `<div class="text-xs text-slate-500">${rec.memo}</div>` : ''}
+                                            </div>
+                                            <button onclick="app.deleteCommunityRecord('${rec.id}')" class="p-1 text-slate-400 hover:text-rose-600 transition">
+                                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                            </button>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+
+            // Work Handlers
+            saveWorkSettings(e) {
+                e.preventDefault();
+                this.data.workSettings.monthlySalary = parseFloat(document.getElementById('ws-salary').value) || 0;
+                this.data.workSettings.dailyHours = parseFloat(document.getElementById('ws-hours').value) || 8;
+                this.data.workSettings.overtimeRate1 = parseFloat(document.getElementById('ws-ot1').value) || 1.34;
+                this.data.workSettings.restDayRate1 = parseFloat(document.getElementById('ws-rest1').value) || 1.34;
+                this.data.workSettings.restDayRate2 = parseFloat(document.getElementById('ws-rest2').value) || 1.67;
+                this.saveState();
+                showToast('工作與休息日費率設定已更新', 'check-circle');
+            }
+
+            openWorkRecordModal() {
+                const todayStr = DateUtils.formatYMD(new Date());
+                openModal(`
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">新增/更新 出勤與加班紀錄</h3>
+                    <form onsubmit="app.saveWorkRecord(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">日期</label>
+                            <input type="date" id="m-work-date" value="${todayStr}" required class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">出勤類型</label>
+                            <select id="m-work-type" onchange="app.toggleWorkModalType(this.value)" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm">
+                                <option value="work">正常上班</option>
+                                <option value="rest_overtime">休息日加班</option>
+                                <option value="leave">休假 / 請假</option>
+                            </select>
+                        </div>
+
+                        <!-- Normal Work -->
+                        <div id="m-work-fields" class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">上班時間</label>
+                                <input type="time" id="m-work-in" value="09:00" class="w-full px-3 py-2 border rounded-xl text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">下班時間</label>
+                                <input type="time" id="m-work-out" value="18:00" class="w-full px-3 py-2 border rounded-xl text-sm">
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">平日加班時數 (小時)</label>
+                                <input type="number" step="0.5" id="m-work-ot" value="0" class="w-full px-3 py-2 border rounded-xl text-sm">
+                            </div>
+                        </div>
+
+                        <!-- Rest Day Overtime -->
+                        <div id="m-rest-fields" class="hidden">
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">休息日加班總時數 (小時)</label>
+                            <input type="number" step="0.5" id="m-rest-hours" placeholder="請輸入當日加班幾小時" class="w-full px-3 py-2 border rounded-xl text-sm">
+                            <p class="text-[11px] text-purple-600 mt-1">自動依設定將前2小時與3-8小時帶入加成比例試算</p>
+                        </div>
+
+                        <!-- Leave -->
+                        <div id="m-leave-fields" class="hidden">
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">假別</label>
+                            <select id="m-leave-type" class="w-full px-3 py-2 border rounded-xl text-sm">
+                                <option value="特休">特休</option>
+                                <option value="病假">病假</option>
+                                <option value="事假">事假</option>
+                                <option value="補休">補休</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">備忘錄</label>
+                            <input type="text" id="m-work-memo" placeholder="備註內容..." class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm">
+                        </div>
+                        <div class="flex justify-end gap-2 pt-2">
+                            <button type="button" onclick="closeModal()" class="px-4 py-2 border border-slate-200 rounded-xl text-sm font-medium">取消</button>
+                            <button type="submit" class="px-4 py-2 bg-brand-500 text-white rounded-xl text-sm font-semibold">儲存紀錄</button>
+                        </div>
+                    </form>
+                `);
+            }
+
+            toggleWorkModalType(val) {
+                const wFields = document.getElementById('m-work-fields');
+                const rFields = document.getElementById('m-rest-fields');
+                const lFields = document.getElementById('m-leave-fields');
+
+                wFields.classList.add('hidden');
+                rFields.classList.add('hidden');
+                lFields.classList.add('hidden');
+
+                if (val === 'work') wFields.classList.remove('hidden');
+                else if (val === 'rest_overtime') rFields.classList.remove('hidden');
+                else if (val === 'leave') lFields.classList.remove('hidden');
+            }
+
+            saveWorkRecord(e) {
+                e.preventDefault();
+                const date = document.getElementById('m-work-date').value;
+                const type = document.getElementById('m-work-type').value;
+
+                if (type === 'work') {
+                    this.data.workRecords[date] = {
+                        type: 'work',
+                        checkIn: document.getElementById('m-work-in').value,
+                        checkOut: document.getElementById('m-work-out').value,
+                        overtimeHours: parseFloat(document.getElementById('m-work-ot').value) || 0,
+                        memo: document.getElementById('m-work-memo').value
+                    };
+                } else if (type === 'rest_overtime') {
+                    this.data.workRecords[date] = {
+                        type: 'rest_overtime',
+                        restDayHours: parseFloat(document.getElementById('m-rest-hours').value) || 0,
+                        memo: document.getElementById('m-work-memo').value
+                    };
+                } else {
+                    this.data.workRecords[date] = {
+                        type: 'leave',
+                        leaveType: document.getElementById('m-leave-type').value,
+                        memo: document.getElementById('m-work-memo').value
+                    };
+                }
+                closeModal();
+                this.saveState();
+                showToast('已更新工作紀錄', 'check-circle');
+            }
+
+            deleteWorkRecord(date) {
+                delete this.data.workRecords[date];
+                this.saveState();
+                showToast('已刪除工作紀錄', 'trash-2');
+            }
+
+            savePartTimeSettings(e) {
+                e.preventDefault();
+                this.data.partTimeSettings.hourlyRate = parseFloat(document.getElementById('pt-rate').value) || 0;
+                this.data.partTimeSettings.holidayRateMultiplier = parseFloat(document.getElementById('pt-holiday-mult').value) || 2.0;
+                this.saveState();
+                showToast('兼職設定已儲存', 'check-circle');
+            }
+
+            openPartTimeModal() {
+                const todayStr = DateUtils.formatYMD(new Date());
+                openModal(`
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">新增兼職與班表安排</h3>
+                    <form onsubmit="app.savePartTimeRecord(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">日期</label>
+                            <input type="date" id="m-pt-date" value="${todayStr}" required class="w-full px-3 py-2 border rounded-xl text-sm">
+                        </div>
+
+                        <!-- Shift Option Setup -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">班別選擇</label>
+                                <select id="m-pt-shifttype" onchange="app.onShiftTypeChange(this.value)" class="w-full px-3 py-2 border rounded-xl text-sm">
+                                    <option value="早班">早班</option>
+                                    <option value="中班">中班</option>
+                                    <option value="晚班" selected>晚班</option>
+                                    <option value="自訂">自訂時間</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">上班時段顯示</label>
+                                <input type="text" id="m-pt-shifttime" value="18:00-22:00" placeholder="例如：09:00-13:00" required class="w-full px-3 py-2 border rounded-xl text-sm">
+                            </div>
+                        </div>
+
+                        <div id="custom-time-picker" class="hidden grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                            <div>
+                                <label class="block text-[11px] font-semibold text-slate-500 mb-1">開始時間</label>
+                                <input type="time" id="m-pt-start" value="18:00" onchange="app.updateShiftTimeStr()" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-semibold text-slate-500 mb-1">結束時間</label>
+                                <input type="time" id="m-pt-end" value="22:00" onchange="app.updateShiftTimeStr()" class="w-full px-2 py-1.5 border rounded-lg text-sm">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">實際工時 (小時)</label>
+                            <input type="number" step="0.5" id="m-pt-hours" placeholder="手動輸入實際數值（不預填）" required class="w-full px-3 py-2 border rounded-xl text-sm">
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="m-pt-holiday" class="w-4 h-4 text-indigo-600 rounded">
+                            <label for="m-pt-holiday" class="text-xs font-semibold text-slate-700">國定假日雙倍薪資</label>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">備註</label>
+                            <input type="text" id="m-pt-memo" placeholder="例如：門市支援" class="w-full px-3 py-2 border rounded-xl text-sm">
+                        </div>
+                        <div class="flex justify-end gap-2 pt-2">
+                            <button type="button" onclick="closeModal()" class="px-4 py-2 border rounded-xl text-sm font-medium">取消</button>
+                            <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold">儲存紀錄</button>
+                        </div>
+                    </form>
+                `);
+            }
+
+            onShiftTypeChange(val) {
+                const shiftTimeInput = document.getElementById('m-pt-shifttime');
+                const customPicker = document.getElementById('custom-time-picker');
+
+                if (val === '早班') {
+                    shiftTimeInput.value = '08:00-12:00';
+                    customPicker.classList.add('hidden');
+                } else if (val === '中班') {
+                    shiftTimeInput.value = '12:00-17:00';
+                    customPicker.classList.add('hidden');
+                } else if (val === '晚班') {
+                    shiftTimeInput.value = '18:00-22:00';
+                    customPicker.classList.add('hidden');
+                } else {
+                    customPicker.classList.remove('hidden');
+                    this.updateShiftTimeStr();
+                }
+            }
+
+            updateShiftTimeStr() {
+                const start = document.getElementById('m-pt-start').value;
+                const end = document.getElementById('m-pt-end').value;
+                if (start && end) {
+                    document.getElementById('m-pt-shifttime').value = `${start}-${end}`;
+                }
+            }
+
+            savePartTimeRecord(e) {
+                e.preventDefault();
+                const record = {
+                    id: 'pt_' + Date.now(),
+                    date: document.getElementById('m-pt-date').value,
+                    shiftType: document.getElementById('m-pt-shifttype').value,
+                    shiftTime: document.getElementById('m-pt-shifttime').value,
+                    hours: parseFloat(document.getElementById('m-pt-hours').value) || 0,
+                    isNationalHoliday: document.getElementById('m-pt-holiday').checked,
+                    memo: document.getElementById('m-pt-memo').value
+                };
+                this.data.partTimeRecords.push(record);
+                closeModal();
+                this.saveState();
+                showToast('已新增兼職與排班紀錄', 'check-circle');
+            }
+
+            deletePartTimeRecord(id) {
+                this.data.partTimeRecords = this.data.partTimeRecords.filter(r => r.id !== id);
+                this.saveState();
+                showToast('已刪除兼職紀錄', 'trash-2');
+            }
+
+            // Schedule & Extra Income Handlers
+            openScheduleModal() {
+                const todayStr = DateUtils.formatYMD(new Date());
+                openModal(`
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">新增行程規劃</h3>
+                    <form onsubmit="app.saveSchedule(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">日期</label>
+                            <input type="date" id="m-sc-date" value="${todayStr}" required class="w-full px-3 py-2 border rounded-xl text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">行程名稱</label>
+                            <input type="text" id="m-sc-title" required placeholder="例如：陽明山賞花" class="w-full px-3 py-2 border rounded-xl text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">分類</label>
+                            <select id="m-sc-category" class="w-full px-3 py-2 border rounded-xl text-sm">
+                                <option value="Trip">出遊 (Trip)</option>
+                                <option value="Friends">朋友 (Friends)</option>
+                                <option value="Family">家人 (Family)</option>
+                                <option value="Tasks">事情 (Tasks)</option>
+                                <option value="Other">其他 (Other)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">備忘</label>
+                            <input type="text" id="m-sc-memo" placeholder="攜帶雨具..." class="w-full px-3 py-2 border rounded-xl text-sm">
+                        </div>
+                        <div class="flex justify-end gap-2 pt-2">
+                            <button type="button" onclick="closeModal()" class="px-4 py-2 border rounded-xl text-sm font-medium">取消</button>
+                            <button type="submit" class="px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-semibold">新增行程</button>
+                        </div>
+                    </form>
+                `);
+            }
+
+            saveSchedule(e) {
+                e.preventDefault();
+                this.data.schedules.push({
+                    id: 'sc_' + Date.now(),
+                    date: document.getElementById('m-sc-date').value,
+                    title: document.getElementById('m-sc-title').value,
+                    category: document.getElementById('m-sc-category').value,
+                    memo: document.getElementById('m-sc-memo').value
+                });
+                closeModal();
+                this.saveState();
+                showToast('已新增行程', 'check-circle');
+            }
+
+            deleteSchedule(id) {
+                this.data.schedules = this.data.schedules.filter(s => s.id !== id);
+                this.saveState();
+                showToast('已刪除行程', 'trash-2');
+            }
+
+            openExtraIncomeModal() {
+                const todayStr = DateUtils.formatYMD(new Date());
+                openModal(`
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">紀錄當日額外收入</h3>
+                    <form onsubmit="app.saveExtraIncome(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">日期</label>
+                            <input type="date" id="m-ei-date" value="${todayStr}" required class="w-full px-3 py-2 border rounded-xl text-sm">
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">外送收入</label>
+                                <input type="number" id="m-ei-delivery" value="0" class="w-full px-3 py-2 border rounded-xl text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">小費</label>
+                                <input type="number" id="m-ei-tips" value="0" class="w-full px-3 py-2 border rounded-xl text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">其他</label>
+                                <input type="number" id="m-ei-other" value="0" class="w-full px-3 py-2 border rounded-xl text-sm">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">備註</label>
+                            <input type="text" id="m-ei-memo" placeholder="例如：外送3單" class="w-full px-3 py-2 border rounded-xl text-sm">
+                        </div>
+                        <div class="flex justify-end gap-2 pt-2">
+                            <button type="button" onclick="closeModal()" class="px-4 py-2 border rounded-xl text-sm font-medium">取消</button>
+                            <button type="submit" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold">儲存收入</button>
+                        </div>
+                    </form>
+                `);
+            }
+
+            saveExtraIncome(e) {
+                e.preventDefault();
+                this.data.extraIncomes.push({
+                    id: 'ei_' + Date.now(),
+                    date: document.getElementById('m-ei-date').value,
+                    foodDelivery: parseFloat(document.getElementById('m-ei-delivery').value) || 0,
+                    tips: parseFloat(document.getElementById('m-ei-tips').value) || 0,
+                    other: parseFloat(document.getElementById('m-ei-other').value) || 0,
+                    memo: document.getElementById('m-ei-memo').value
+                });
+                closeModal();
+                this.saveState();
+                showToast('已新增當日額外收入', 'check-circle');
+            }
+
+            deleteExtraIncome(id) {
+                this.data.extraIncomes = this.data.extraIncomes.filter(e => e.id !== id);
+                this.saveState();
+                showToast('已刪除收入紀錄', 'trash-2');
+            }
+
+            // Community Service Handlers
+            openCsTargetModal() {
+                openModal(`
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">設定年度社勞總目標時數</h3>
+                    <form onsubmit="app.saveCsTarget(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">年度目標時數 (小時)</label>
+                            <input type="number" id="m-cs-target" value="${this.data.communitySettings.annualTargetHours}" required class="w-full px-3 py-2 border rounded-xl text-sm">
+                        </div>
+                        <div class="flex justify-end gap-2 pt-2">
+                            <button type="button" onclick="closeModal()" class="px-4 py-2 border rounded-xl text-sm font-medium">取消</button>
+                            <button type="submit" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold">儲存目標</button>
+                        </div>
+                    </form>
+                `);
+            }
+
+            saveCsTarget(e) {
+                e.preventDefault();
+                this.data.communitySettings.annualTargetHours = parseFloat(document.getElementById('m-cs-target').value) || 100;
+                closeModal();
+                this.saveState();
+                showToast('年度目標時數已更新', 'check-circle');
+            }
+
+            openCommunityModal() {
+                const todayStr = DateUtils.formatYMD(new Date());
+                openModal(`
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">新增社會勞動紀錄</h3>
+                    <form onsubmit="app.saveCommunityRecord(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">日期</label>
+                            <input type="date" id="m-cs-date" value="${todayStr}" required class="w-full px-3 py-2 border rounded-xl text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">服務項目 / 內容</label>
+                            <input type="text" id="m-cs-title" required placeholder="例如：社區公園淨灘" class="w-full px-3 py-2 border rounded-xl text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">預估時數 (小時)</label>
+                            <input type="number" step="0.5" id="m-cs-hours" required placeholder="輸入預計時數" class="w-full px-3 py-2 border rounded-xl text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">備註</label>
+                            <input type="text" id="m-cs-memo" placeholder="活動備註..." class="w-full px-3 py-2 border rounded-xl text-sm">
+                        </div>
+                        <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800">
+                            提示：新增紀錄狀態預設為「預計安排 (pending)」，需點擊「確認完成」核入累積時數。
+                        </div>
+                        <div class="flex justify-end gap-2 pt-2">
+                            <button type="button" onclick="closeModal()" class="px-4 py-2 border rounded-xl text-sm font-medium">取消</button>
+                            <button type="submit" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold">建立預計安排</button>
+                        </div>
+                    </form>
+                `);
+            }
+
+            saveCommunityRecord(e) {
+                e.preventDefault();
+                this.data.communityRecords.push({
+                    id: 'cs_' + Date.now(),
+                    date: document.getElementById('m-cs-date').value,
+                    title: document.getElementById('m-cs-title').value,
+                    hours: parseFloat(document.getElementById('m-cs-hours').value) || 0,
+                    status: 'pending',
+                    memo: document.getElementById('m-cs-memo').value
+                });
+                closeModal();
+                this.saveState();
+                showToast('已建立社勞預計安排紀錄', 'check-circle');
+            }
+
+            confirmCsCompletion(id) {
+                const rec = this.data.communityRecords.find(r => r.id === id);
+                if (rec) {
+                    rec.status = 'completed';
+                    this.saveState();
+                    showToast(`已核入完成時數 ${rec.hours} 小時！`, 'award');
+                }
+            }
+
+            deleteCommunityRecord(id) {
+                this.data.communityRecords = this.data.communityRecords.filter(r => r.id !== id);
+                this.saveState();
+                showToast('已刪除社勞紀錄', 'trash-2');
+            }
+
+            // Export / Import
+            exportData() {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.data, null, 2));
+                const downloadAnchor = document.createElement('a');
+                downloadAnchor.setAttribute("href", dataStr);
+                downloadAnchor.setAttribute("download", `WorkLife_Backup_${DateUtils.formatYMD(new Date())}.json`);
+                document.body.appendChild(downloadAnchor);
+                downloadAnchor.click();
+                downloadAnchor.remove();
+                showToast('已成功匯出 JSON 資料', 'download');
+            }
+
+            importData(event) {
+                const fileReader = new FileReader();
+                fileReader.onload = (e) => {
+                    try {
+                        const parsed = JSON.parse(e.target.result);
+                        this.data = parsed;
+                        this.saveState();
+                        showToast('成功匯入資料並更新', 'check-circle');
+                    } catch (err) {
+                        showToast('匯入失敗：格式不正確', 'alert-circle');
+                    }
+                };
+                if(event.target.files[0]) {
+                    fileReader.readAsText(event.target.files[0]);
+                }
+            }
+
+            resetDemoData() {
+                if (confirm('確定要將所有資料重置為預設示範資料嗎？')) {
+                    this.resetDemo();
+                }
+            }
+        }
+
+        function openModal(htmlContent) {
+            const backdrop = document.getElementById('modal-backdrop');
+            const content = document.getElementById('modal-content');
+            content.innerHTML = htmlContent;
+            backdrop.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            const backdrop = document.getElementById('modal-backdrop');
+            backdrop.classList.add('hidden');
+        }
+
+        function showToast(message, iconName = 'info') {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toast-message');
+            const toastIcon = document.getElementById('toast-icon');
+
+            toastMsg.innerText = message;
+            toastIcon.setAttribute('data-lucide', iconName);
+            lucide.createIcons();
+
+            toast.classList.remove('translate-y-[-100px]', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-[-100px]', 'opacity-0');
+            }, 2500);
+        }
+
+        let app;
+        window.onload = function() {
+            app = new AppState();
+            app.render();
+
+            document.getElementById('modal-backdrop').addEventListener('click', function(e) {
+                if (e.target === this) closeModal();
+            });
+        };
+    </script>
+</body>
+</html>
